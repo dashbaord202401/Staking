@@ -63,7 +63,7 @@ contract FlexibleStaking is ReentrancyGuard, Ownable {
     }
 
     function Stake(uint256 amount) external payable nonReentrant {
-        require(msg.value >= MIN_STAKE_AMOUNT, MIN_CONTRIBUTION);
+        require(amount >= MIN_STAKE_AMOUNT, MIN_CONTRIBUTION);
         address user = msg.sender;
         betToken.transferFrom(msg.sender, address(this), amount);
 
