@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.15;
 
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
@@ -20,7 +20,7 @@ contract LockedStaking is
     uint256 public tokenStakeCounter;
 
     uint256 public MIN_STAKE_AMOUNT = 100;
-    uint256 public STAKE_PERIOD = 365 days;
+    uint256 public STAKE_PERIOD = 1;
 
     string private constant ZERO_BAL = "Zero Balance";
     string private constant NO_CONTRIBUTION = "No Contributions";
@@ -59,14 +59,10 @@ contract LockedStaking is
     mapping(uint256 => tokenStaker) public tokenStakers;
     mapping(uint256 => nftStaker) public nftStakers;
     mapping(uint256 => FractionStaker) public fractionStakers;
+
     mapping(address => uint256[]) private StakedFractions;
     mapping(address => uint256[]) private StakedNfts;
     mapping(address => uint256[]) private StakedTokens;
-
-    address[] public tokenStakerList;
-    address[] public nftStakerList;
-    address[] public fractionStakerList;
-    address[] private auxArray;
 
     constructor() ReentrancyGuard() {}
 
@@ -93,9 +89,13 @@ contract LockedStaking is
 
     function tokenStake(address token, uint256 amount) external nonReentrant {
         require(amount >= MIN_STAKE_AMOUNT, MIN_CONTRIBUTION);
+        require(
+            IERC20(token).balanceOf(msg.sender) >= amount,
+            "Insufficient Balance!"
+        );
         IERC20(token).transferFrom(msg.sender, address(this), amount);
 
-         tokenStakers[tokenStakeCounter] = tokenStaker(
+        tokenStakers[tokenStakeCounter] = tokenStaker(
             msg.sender,
             token,
             amount,
@@ -103,11 +103,15 @@ contract LockedStaking is
             block.timestamp + STAKE_PERIOD,
             true
         );
-         StakedTokens[msg.sender].push(tokenStakeCounter);
+        StakedTokens[msg.sender].push(tokenStakeCounter);
         tokenStakeCounter++;
     }
 
-    function nftStake(address _collection, uint256 _tokenId) external {
+    function nftStake(address _collection, uint256 _tokenId) external nonReentrant{
+        require(
+            IERC721(_collection).ownerOf(_tokenId) == msg.sender,
+            "Not owner!"
+        );
         IERC721(_collection).safeTransferFrom(
             msg.sender,
             address(this),
@@ -130,7 +134,7 @@ contract LockedStaking is
         address _collection,
         uint256 _tokenId,
         uint256 _quantity
-    ) external {
+    ) external nonReentrant {
         require(
             IERC1155(_collection).balanceOf(msg.sender, _tokenId) >= _quantity,
             "Insufficient Balance!"
@@ -159,11 +163,15 @@ contract LockedStaking is
         require(tokenStakers[_id].user == msg.sender, "Not Staker");
         require(tokenStakers[_id].exists == true, "Not Staked");
         require(
-            tokenStakers[_id].endsIn >= block.timestamp,
+            tokenStakers[_id].endsIn <= block.timestamp,
             "Token Staking not completed"
         );
         tokenStakers[_id].exists = false;
-        IERC20(tokenStakers[_id].token).transferFrom(address(this), msg.sender, tokenStakers[_id].amount);
+        IERC20(tokenStakers[_id].token).transferFrom(
+            address(this),
+            msg.sender,
+            tokenStakers[_id].amount
+        );
     }
 
     function unStakeNft(uint256 _id) external {
@@ -171,7 +179,7 @@ contract LockedStaking is
         require(nftStakers[_id].exists == true, "Not Staked");
 
         require(
-            nftStakers[_id].endsIn >= block.timestamp,
+            nftStakers[_id].endsIn <= block.timestamp,
             "NFT Staking not completed"
         );
         nftStakers[_id].exists = false;
@@ -187,7 +195,7 @@ contract LockedStaking is
         require(fractionStakers[_id].exists == true, "Not Staked");
 
         require(
-            fractionStakers[_id].endsIn >= block.timestamp,
+            fractionStakers[_id].endsIn <= block.timestamp,
             "NFT Staking not completed"
         );
         fractionStakers[_id].exists = false;
@@ -212,21 +220,7 @@ contract LockedStaking is
         return fractionStakers[a].exists;
     }
 
-    function remainingTokenStakeTime(uint256 _id) public view returns (uint256) {
-        return tokenStakers[_id].endsIn - block.timestamp;
+    function withdraw() external onlyOwner {
+        payable(owner()).transfer(address(this).balance);
     }
-
-    function remainingNftStakeTime(uint256 _id) public view returns (uint256) {
-        return nftStakers[_id].endsIn - block.timestamp;
-    }
-
-    function remainingFractionStakeTime(uint256 _id)
-        public
-        view
-        returns (uint256)
-    {
-        return fractionStakers[_id].endsIn - block.timestamp;
-    }
-
 }
-
