@@ -15,9 +15,9 @@ contract LockedStaking is
     ERC721HolderUpgradeable,
     ERC1155HolderUpgradeable
 {
-    uint256 public fractionCounter;
-    uint256 public nftCounter;
-    uint256 public tokenCounter;
+    uint256 public fractionStakeCounter;
+    uint256 public nftStakeCounter;
+    uint256 public tokenStakeCounter;
 
     uint256 public MIN_STAKE_AMOUNT = 100;
     uint256 public STAKE_PERIOD = 365 days;
@@ -31,7 +31,7 @@ contract LockedStaking is
     struct tokenStaker {
         address user;
         address token;
-        uint256 contribution;
+        uint256 amount;
         uint256 joined;
         uint256 endsIn;
         bool exists;
@@ -56,19 +56,19 @@ contract LockedStaking is
         bool exists;
     }
 
-    mapping(address => tokenStaker) public tokenStakers;
+    mapping(uint256 => tokenStaker) public tokenStakers;
     mapping(uint256 => nftStaker) public nftStakers;
     mapping(uint256 => FractionStaker) public fractionStakers;
     mapping(address => uint256[]) private StakedFractions;
     mapping(address => uint256[]) private StakedNfts;
+    mapping(address => uint256[]) private StakedTokens;
 
     address[] public tokenStakerList;
     address[] public nftStakerList;
     address[] public fractionStakerList;
     address[] private auxArray;
 
-    constructor() ReentrancyGuard() {
-    }
+    constructor() ReentrancyGuard() {}
 
     receive() external payable {}
 
@@ -79,29 +79,32 @@ contract LockedStaking is
         MIN_STAKE_AMOUNT = _amount;
     }
 
-    function getFractionStakeData() external view returns  ( uint256[] memory){
-    return StakedFractions[msg.sender];
+    function getFractionStakeData() external view returns (uint256[] memory) {
+        return StakedFractions[msg.sender];
     }
 
+    function getNftStakeData() external view returns (uint256[] memory) {
+        return StakedNfts[msg.sender];
+    }
 
-    function getNftStakeData() external view returns  ( uint256[] memory){
-    return StakedNfts[msg.sender];
+    function getTokenStakeData() external view returns (uint256[] memory) {
+        return StakedTokens[msg.sender];
     }
 
     function tokenStake(address token, uint256 amount) external nonReentrant {
-        require(tokenStakers[msg.sender].exists == false, "Already Staked");
         require(amount >= MIN_STAKE_AMOUNT, MIN_CONTRIBUTION);
-        address user = msg.sender;
         IERC20(token).transferFrom(msg.sender, address(this), amount);
-        tokenStaker memory newUser;
-        newUser.user = user;
-        newUser.token = token;
-        newUser.contribution = amount;
-        newUser.exists = true;
-        newUser.joined = block.timestamp;
-        newUser.endsIn = block.timestamp + STAKE_PERIOD;
-        tokenStakers[user] = newUser;
-        tokenStakerList.push(user);
+
+         tokenStakers[tokenStakeCounter] = tokenStaker(
+            msg.sender,
+            token,
+            amount,
+            block.timestamp,
+            block.timestamp + STAKE_PERIOD,
+            true
+        );
+         StakedTokens[msg.sender].push(tokenStakeCounter);
+        tokenStakeCounter++;
     }
 
     function nftStake(address _collection, uint256 _tokenId) external {
@@ -111,7 +114,7 @@ contract LockedStaking is
             _tokenId
         );
 
-        nftStakers[nftCounter] =    nftStakers[fractionCounter] = nftStaker(
+        nftStakers[nftStakeCounter] = nftStaker(
             msg.sender,
             _collection,
             _tokenId,
@@ -119,8 +122,8 @@ contract LockedStaking is
             block.timestamp + STAKE_PERIOD,
             true
         );
-        StakedNfts[msg.sender].push(nftCounter);
-        nftCounter++;
+        StakedNfts[msg.sender].push(nftStakeCounter);
+        nftStakeCounter++;
     }
 
     function fractionStake(
@@ -139,7 +142,7 @@ contract LockedStaking is
             _quantity,
             "0x00"
         );
-        fractionStakers[fractionCounter] = FractionStaker(
+        fractionStakers[fractionStakeCounter] = FractionStaker(
             msg.sender,
             _collection,
             _tokenId,
@@ -148,23 +151,25 @@ contract LockedStaking is
             block.timestamp + STAKE_PERIOD,
             true
         );
-        StakedFractions[msg.sender].push(fractionCounter);
-        fractionCounter++;
+        StakedFractions[msg.sender].push(fractionStakeCounter);
+        fractionStakeCounter++;
     }
 
-    function unStakeToken(address _token) external {
-        require(tokenStakers[msg.sender].exists == true, "Not Staked");
+    function unStakeToken(uint256 _id) external {
+        require(tokenStakers[_id].user == msg.sender, "Not Staker");
+        require(tokenStakers[_id].exists == true, "Not Staked");
         require(
-            tokenStakers[msg.sender].endsIn >= block.timestamp,
+            tokenStakers[_id].endsIn >= block.timestamp,
             "Token Staking not completed"
         );
-        uint256 stakedAmount = tokenStakers[msg.sender].contribution;
-        tokenStakers[msg.sender].exists = false;
-        IERC20(_token).transferFrom(address(this), msg.sender, stakedAmount);
+        tokenStakers[_id].exists = false;
+        IERC20(tokenStakers[_id].token).transferFrom(address(this), msg.sender, tokenStakers[_id].amount);
     }
 
     function unStakeNft(uint256 _id) external {
         require(nftStakers[_id].user == msg.sender, "Not Staker");
+        require(nftStakers[_id].exists == true, "Not Staked");
+
         require(
             nftStakers[_id].endsIn >= block.timestamp,
             "NFT Staking not completed"
@@ -177,47 +182,51 @@ contract LockedStaking is
         );
     }
 
-        function unStakeFration(uint256 _id) external {
-        require(nftStakers[_id].user == msg.sender, "Not Staker");
+    function unStakeFration(uint256 _id) external {
+        require(fractionStakers[_id].user == msg.sender, "Not Staker");
+        require(fractionStakers[_id].exists == true, "Not Staked");
+
         require(
-            nftStakers[_id].endsIn >= block.timestamp,
+            fractionStakers[_id].endsIn >= block.timestamp,
             "NFT Staking not completed"
         );
-        nftStakers[_id].exists = false;
-        IERC721(nftStakers[_id].collection).safeTransferFrom(
+        fractionStakers[_id].exists = false;
+        IERC1155(fractionStakers[_id].collection).safeTransferFrom(
             address(this),
             msg.sender,
-            nftStakers[_id].tokenId
+            fractionStakers[_id].tokenId,
+            fractionStakers[_id].quantity,
+            "0x00"
         );
     }
 
-    function isTokenStakerExists(address a) public view returns (bool) {
+    function isTokenStakerExists(uint256 a) public view returns (bool) {
         return tokenStakers[a].exists;
     }
 
     function isNftStakeExists(uint256 a) public view returns (bool) {
         return nftStakers[a].exists;
     }
-        function isFractionStakeExists(uint256 a) public view returns (bool) {
+
+    function isFractionStakeExists(uint256 a) public view returns (bool) {
         return fractionStakers[a].exists;
     }
 
-    function remainingTokenStakeTime() public view returns (uint256) {
-        return tokenStakers[msg.sender].endsIn - block.timestamp;
+    function remainingTokenStakeTime(uint256 _id) public view returns (uint256) {
+        return tokenStakers[_id].endsIn - block.timestamp;
     }
 
     function remainingNftStakeTime(uint256 _id) public view returns (uint256) {
         return nftStakers[_id].endsIn - block.timestamp;
     }
-       function remainingFractionStakeTime(uint256 _id) public view returns (uint256) {
+
+    function remainingFractionStakeTime(uint256 _id)
+        public
+        view
+        returns (uint256)
+    {
         return fractionStakers[_id].endsIn - block.timestamp;
     }
 
-    function toekenStakerCount() public view returns (uint256) {
-        return tokenStakerList.length;
-    }
-
-    function nftStakerCount() public view returns (uint256) {
-        return nftStakerList.length;
-    }
 }
+
