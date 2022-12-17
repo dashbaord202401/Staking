@@ -161,14 +161,13 @@ contract LockedStaking is
 
     function unStakeToken(uint256 _id) external {
         require(tokenStakers[_id].user == msg.sender, "Not Staker");
-        require(tokenStakers[_id].exists == true, "Not Staked");
+        require(tokenStakers[_id].exists == true, "Not Exists");
         require(
             tokenStakers[_id].endsIn <= block.timestamp,
             "Token Staking not completed"
         );
         tokenStakers[_id].exists = false;
-        IERC20(tokenStakers[_id].token).transferFrom(
-            address(this),
+        IERC20(tokenStakers[_id].token).transfer(
             msg.sender,
             tokenStakers[_id].amount
         );
@@ -176,7 +175,7 @@ contract LockedStaking is
 
     function unStakeNft(uint256 _id) external {
         require(nftStakers[_id].user == msg.sender, "Not Staker");
-        require(nftStakers[_id].exists == true, "Not Staked");
+        require(nftStakers[_id].exists == true, "Not Exists");
 
         require(
             nftStakers[_id].endsIn <= block.timestamp,
@@ -192,7 +191,7 @@ contract LockedStaking is
 
     function unStakeFration(uint256 _id) external {
         require(fractionStakers[_id].user == msg.sender, "Not Staker");
-        require(fractionStakers[_id].exists == true, "Not Staked");
+        require(fractionStakers[_id].exists == true, "Not Exists");
 
         require(
             fractionStakers[_id].endsIn <= block.timestamp,
