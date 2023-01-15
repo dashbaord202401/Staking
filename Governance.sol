@@ -20,6 +20,9 @@ contract Governance is Ownable {
     // Mapping from proposal ID to the total token weight of votes for and against
     mapping(uint256 => Vote) public voteTotals;
 
+    // Mapping from proposal ID to the voting address to voting status
+    mapping(uint256 => mapping(address => bool)) public voters;
+
     // Proposal state
     enum State {
         Created,
@@ -45,6 +48,7 @@ contract Governance is Ownable {
 
     // Event for when a proposal is executed
     event ProposalExecuted(uint256 indexed proposalId);
+
     // Event for when a proposal is failed
     event ProposalFailed(uint256 indexed proposalId);
 
@@ -94,6 +98,7 @@ contract Governance is Ownable {
     // Cast a proposal
     function vote(uint256 _proposalId, bool _vote) public {
         require(proposals[_proposalId].votingPeriod > block.timestamp);
+        require(!voters[_proposalId][msg.sender]);
         // require(
         //     voteTotals[_proposalId].yes + voteTotals[_proposalId].no == 0 ||
         //         voteTotals[_proposalId].yes + voteTotals[_proposalId].no > 0
@@ -104,6 +109,7 @@ contract Governance is Ownable {
         } else {
             voteTotals[_proposalId].no += token.balanceOf(msg.sender);
         }
+        voters[_proposalId][msg.sender] = true;
         emit VoteCast(_proposalId, msg.sender, _vote);
     }
 
