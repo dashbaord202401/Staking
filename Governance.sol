@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.9;
+pragma solidity ^0.8.4;
 
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
-import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 
-contract Governance is Ownable {
+contract Governance is OwnableUpgradeable {
     // ERC20 token contract address
     ERC20 public token;
 
@@ -67,16 +67,25 @@ contract Governance is Ownable {
         uint256 no;
     }
 
-    constructor(address _token, uint256 _votingPeriod) {
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor() {
+        _disableInitializers();
+    }
+
+    function initialize(
+        address _token,
+        uint256 _votingPeriod
+    ) external initializer {
         token = ERC20(_token);
         votingPeriod = _votingPeriod;
+        __Ownable_init();
     }
 
     // Create a new proposal
-    function createProposal(string memory _name, string memory _description)
-        public
-        onlyOwner
-    {
+    function createProposal(
+        string memory _name,
+        string memory _description
+    ) public onlyOwner {
         proposalId++;
         proposals[proposalId] = Proposal(
             msg.sender,
@@ -98,12 +107,7 @@ contract Governance is Ownable {
     // Cast a proposal
     function vote(uint256 _proposalId, bool _vote) public {
         require(proposals[_proposalId].votingPeriod > block.timestamp);
-        require(!voters[_proposalId][msg.sender]);
-        // require(
-        //     voteTotals[_proposalId].yes + voteTotals[_proposalId].no == 0 ||
-        //         voteTotals[_proposalId].yes + voteTotals[_proposalId].no > 0
-        // );
-        // require(_vote == true || _vote == false);
+        require(!voters[_proposalId][msg.sender], "Already voted");
         if (_vote) {
             voteTotals[_proposalId].yes += token.balanceOf(msg.sender);
         } else {
@@ -114,11 +118,9 @@ contract Governance is Ownable {
     }
 
     // Check if a proposal has passed
-    function checkProposalPassed(uint256 _proposalId)
-        internal
-        view
-        returns (bool)
-    {
+    function checkProposalPassed(
+        uint256 _proposalId
+    ) internal view returns (bool) {
         return voteTotals[_proposalId].yes > voteTotals[_proposalId].no;
     }
 
@@ -130,11 +132,9 @@ contract Governance is Ownable {
         return proposals[_proposalId].votingPeriod - block.timestamp;
     }
 
-    function checkVoting(uint256 _proposalId)
-        public
-        view
-        returns (Vote memory)
-    {
+    function checkVoteDetails(
+        uint256 _proposalId
+    ) public view returns (Vote memory) {
         return voteTotals[_proposalId];
     }
 
