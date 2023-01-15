@@ -20,7 +20,7 @@ contract LockedStaking is
     uint256 public tokenStakeCounter;
 
     uint256 public MIN_STAKE_AMOUNT = 100;
-    uint256 public STAKE_PERIOD = 1;
+    uint256 public STAKE_PERIOD = 365 days;
 
     string private constant ZERO_BAL = "Zero Balance";
     string private constant NO_CONTRIBUTION = "No Contributions";
